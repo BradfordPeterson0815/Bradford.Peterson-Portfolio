@@ -1,0 +1,2 @@
+Name,Id (Blank = New),Base Rate After Hours,Base Rate During Hours,High Roof Rate,Under 7/12,7/12 to 9/12,10/12 to 12/12,Over 12/12,Mechanical After Hours,Mechanical During Hours,Mechanical Material Cost,Sandbag After Hours,Sandbag During Hours,Sandbag Material Cost,Surtax
+TestRegionRateUpload,,10,5,10,10,10,10,10,20,10,10,20,10,10,0.5

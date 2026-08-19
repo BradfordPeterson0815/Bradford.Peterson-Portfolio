@@ -1,0 +1,478 @@
+import { Locator, expect } from '@playwright/test'
+import { Element } from '../shared/element.js'
+import {
+  DataTableStrings,
+  DataTable_ColumnName_Index,
+  DataTable_Columns_Type,
+  DataTable_ShowPageSize_Options,
+  DataTable_Column_SortState,
+} from './clientPortalConstants.js'
+import { LookupDataColumn } from './clientPortalHelper.js'
+import { ClientPortalTableFilterDialog } from './dialogs/clientPortalTableFilterDialog.js'
+import { ClientPortalTableSettingsDialog } from './dialogs/clientPortalTableSettingsDialog.js'
+import { ClientPortalBase } from './pages/clientPortalBase.js'
+import { ClientPortalGlobal } from './clientPortalGlobal.js'
+import { ClientPortalTableSearchDialog } from './dialogs/clientPortalTableSearchDialog.js'
+
+export class ClientPortalDataTable extends ClientPortalBase {
+  readonly parent: Locator
+  readonly table: Locator
+  readonly fixedColumns: number
+  readonly rows: Locator
+  readonly columns: Locator
+  readonly Badge: Element
+  readonly Button_ExpandTable: Element
+  readonly Button_CloseTable: Element
+  readonly Button_OpenTableSettings: Element
+  readonly Button_OpenTableSearch: Element
+  readonly Button_AddTableFilter: Element
+  readonly actionMenuName: string
+  readonly actionMenuAria: string
+  readonly Button_GoToFirstPage: Element
+  readonly Button_GoToPreviousPage: Element
+  readonly Button_GoToNextPage: Element
+  readonly Button_GoToLastPage: Element
+  readonly SpinButton_SetPage: Element
+
+  constructor(
+    global: ClientPortalGlobal,
+    TableSelector: string,
+    fixedColumns: number,
+    actionMenuName: string = 'undefined',
+    actionMenuAria: string = 'undefined'
+  ) {
+    super(global)
+    this.parent = this.page.locator(TableSelector)
+    this.table = this.parent.locator('.data-grid-table-container table')
+    this.fixedColumns = fixedColumns
+    this.rows = this.table.locator(`tbody tr`)
+    this.columns = this.table.locator(`thead tr th`)
+    this.Badge = new Element(global.page, this.parent.locator('.chakra-badge'))
+    this.Button_OpenTableSettings = new Element(
+      global.page,
+      this.parent.getByLabel(DataTableStrings.OpenTableSettings)
+    )
+    this.Button_OpenTableSearch = new Element(
+      global.page,
+      this.parent.getByLabel(DataTableStrings.OpenTableSearch)
+    )
+    this.Button_AddTableFilter = new Element(
+      global.page,
+      this.parent.getByLabel(DataTableStrings.AddTableFilter)
+    )
+    this.Button_ExpandTable = new Element(
+      global.page,
+      this.parent.getByLabel(DataTableStrings.ExpandTable)
+    )
+    this.Button_CloseTable = new Element(
+      global.page,
+      this.page.locator(
+        `section[id*="chakra-modal"] button[aria-label="${DataTableStrings.CloseTable}"]`
+      )
+    )
+    this.actionMenuName = actionMenuName
+    this.actionMenuAria = actionMenuAria
+    this.Button_GoToFirstPage = new Element(
+      global.page,
+      this.parent.getByLabel(DataTableStrings.GoToFirstPage)
+    )
+    this.Button_GoToPreviousPage = new Element(
+      global.page,
+      this.parent.getByLabel(DataTableStrings.GoToPreviousPage)
+    )
+    this.Button_GoToNextPage = new Element(
+      global.page,
+      this.parent.getByLabel(DataTableStrings.GoToNextPage)
+    )
+    this.Button_GoToLastPage = new Element(
+      global.page,
+      this.parent.getByLabel(DataTableStrings.GoToLastPage)
+    )
+    this.SpinButton_SetPage = new Element(global.page, this.parent.getByRole('spinbutton'))
+  }
+
+  async IsVisible() {
+    await this.table.waitFor({ state: 'attached', timeout: 30000 })
+    return await this.table.isVisible()
+  }
+
+  async IsEmpty() {
+    await this.table.isVisible()
+    return (await this.table.locator(`td[id*="DataGrid_Cell_Empty"]`).count()) > 0
+  }
+
+  async BadgeCount() {
+    const badgeText = await this.Badge.GetText()
+    if (badgeText == undefined) {
+      throw new Error('Unable to get badge text')
+    }
+    const dataList = badgeText?.split(' ')
+    return Number(dataList[0])
+  }
+
+  async VisibleRowCount() {
+    await this.page.waitForTimeout(1000)
+    const isEmpty = await this.IsEmpty()
+    return isEmpty ? 0 : await this.rows.count()
+  }
+
+  async VisibleColumnCount() {
+    await this.page.waitForTimeout(1000)
+    return await this.columns.count()
+  }
+
+  async IsColumnVisible(columnType: DataTable_Columns_Type) {
+    const data = new Element(
+      this.global.page,
+      this.table.locator(`th[id$='_HeaderRow_0_HeaderCell_${LookupDataColumn(columnType)}']`)
+    )
+    return await data.IsVisible()
+  }
+
+  async FetchColumnNameByColumnIndex(columnIndex: number) {
+    const th = this.columns.nth(columnIndex)
+    if (columnIndex < this.fixedColumns) {
+      return 'fixed - no header'
+    }
+    const columnName = await th.locator('span').nth(0).textContent()
+    return columnName
+  }
+
+  async FetchColumnIndexByColumnName(targetColumn: DataTable_Columns_Type) {
+    const targetColumnName = LookupDataColumn(targetColumn, DataTable_ColumnName_Index.Column)
+    const count = await this.VisibleColumnCount()
+    for (let index = this.fixedColumns; index < count; index++) {
+      const th = this.columns.nth(index)
+      const columnName = await th.locator('span').nth(0).textContent()
+      if (columnName == targetColumnName) {
+        return index
+      }
+    }
+    throw new Error('Looking for column match that is not visible')
+  }
+
+  async IsColumnSortable(columnType: DataTable_Columns_Type) {
+    const buttonLocator = this.table.locator(
+      `th[id*='_HeaderRow_0_HeaderCell_${LookupDataColumn(
+        columnType
+      )}'] button[aria-label="Toggle sort column."]`
+    )
+    return (await buttonLocator.count()) > 0
+  }
+
+  async SetColumnSortState(
+    columnType: DataTable_Columns_Type,
+    targetSortState: DataTable_Column_SortState
+  ) {
+    const currentSortState = await this.FetchColumnSortState(columnType)
+    if (
+      targetSortState == DataTable_Column_SortState.NotSortable ||
+      currentSortState == DataTable_Column_SortState.NotSortable ||
+      targetSortState == currentSortState
+    ) {
+      return
+    }
+    const buttonLocator = this.table.locator(
+      `th[id*='_HeaderRow_0_HeaderCell_${LookupDataColumn(
+        columnType
+      )}'] button[aria-label="Toggle sort column."]`
+    )
+    await buttonLocator.click()
+    await this.page.waitForTimeout(1000)
+    const nextSortState = await this.FetchColumnSortState(columnType)
+    if (nextSortState != targetSortState) {
+      // click again
+      await buttonLocator.click()
+      await this.page.waitForTimeout(1000)
+    }
+    await this.page.waitForTimeout(500)
+  }
+
+  async FetchColumnSortState(columnType: DataTable_Columns_Type) {
+    const buttonLocator = this.table.locator(
+      `th[id*='_HeaderRow_0_HeaderCell_${LookupDataColumn(
+        columnType
+      )}'] button[aria-label="Toggle sort column."]`
+    )
+    if ((await buttonLocator.count()) > 0) {
+      const pathCount = await buttonLocator.locator('svg path').count()
+      if (pathCount == 3) {
+        return DataTable_Column_SortState.Unsorted
+      }
+      const line1InfoY2 = await buttonLocator.locator('svg line').nth(0).getAttribute('y2')
+      const line2InfoY2 = await buttonLocator.locator('svg line').nth(1).getAttribute('y2')
+      return line2InfoY2 == line1InfoY2
+        ? DataTable_Column_SortState.Down_HighToLow
+        : DataTable_Column_SortState.Up_LowToHigh
+    }
+    return DataTable_Column_SortState.NotSortable
+  }
+
+  async IsColumnInViewPort(columnType: DataTable_Columns_Type) {
+    const headerLocator = this.table.locator(
+      `th[id*='_HeaderRow_0_HeaderCell_${LookupDataColumn(columnType)}']`
+    )
+    return await this.isLocatorInViewport(headerLocator)
+  }
+
+  async isElementInViewport(element: Locator): Promise<boolean> {
+    const viewportSize = element.page().viewportSize()
+    const boundingBox = await element.boundingBox()
+
+    if (!viewportSize || !boundingBox) {
+      return false
+    }
+
+    const isBoundingBoxVisible = boundingBox.x >= 0 && boundingBox.y >= 0
+    const isBoundingBoxInViewport =
+      boundingBox.x + boundingBox.width <= viewportSize.width &&
+      boundingBox.y + boundingBox.height <= viewportSize.height
+
+    return isBoundingBoxVisible && isBoundingBoxInViewport
+  }
+
+  async FetchRowIndexOfDataByColumnName(targetData: string, columnType: DataTable_Columns_Type) {
+    const rows = await this.VisibleRowCount()
+    for (let index = 0; index < rows; index++) {
+      const actualIndex = await this.FetchRowIndexFromRowPosition(index + 1)
+      const rowData = new Element(
+        this.global.page,
+        this.table.locator(`td[id*='_DataGrid_Row_${actualIndex}_${LookupDataColumn(columnType)}']`)
+      )
+      if (targetData == (await rowData.GetText())) {
+        return actualIndex
+      }
+    }
+    return null
+  }
+
+  async FetchRowTextDataByColumnName(rowIndex: string, columnType: DataTable_Columns_Type) {
+    const data = new Element(
+      this.global.page,
+      this.table.locator(`td[id*='_DataGrid_Row_${rowIndex}_${LookupDataColumn(columnType)}']`)
+    )
+    const result = await data.GetText()
+    return result ? result : ''
+  }
+
+  async FetchRowIndexFromRowPosition(rowPosition: number) {
+    const targetRow = this.table.locator(`> tbody tr:nth-child(${rowPosition})`)
+    const targetRowId = await targetRow.getAttribute('id')
+    if (targetRowId == null) {
+      throw new Error(
+        `Unexpected error locating the index of row position: ${rowPosition} from row id of: ${targetRowId}`
+      )
+    }
+    const data = targetRowId.split('_')
+    return data[data.length - 1]
+  }
+
+  async FetchRowIndexFromRowPosition(rowPosition: number) {
+    const targetRow = this.table.locator(`> tbody tr:nth-child(${rowPosition})`)
+    const targetRowId = await targetRow.getAttribute('id')
+    if (targetRowId == null) {
+      throw new Error(
+        `Unexpected error locating the index of row position: ${rowPosition} from row id of: ${targetRowId}`
+      )
+    }
+    const data = targetRowId.split('_')
+    return data[data.length - 1]
+  }
+
+  async VerifyTextDataByColumnName(
+    rowIndex: string,
+    columnType: DataTable_Columns_Type,
+    expectedText: string
+  ) {
+    const value = await this.FetchRowTextDataByColumnName(rowIndex, columnType)
+    expect(value).toContain(expectedText)
+  }
+
+  async OpenActionMenu(rowIndex: string) {
+    const assembledLocator = `td[id*='_DataGrid_Row_${rowIndex}_${this.actionMenuName}'] button[aria-label="${this.actionMenuAria}"]`
+    const button = new Element(this.global.page, this.table.locator(assembledLocator))
+    await button.Click()
+  }
+
+  async IsActionMenuItemVisible(actionMenuItem: string) {
+    const assembledLocator = this.page.getByRole('menuitem', { name: `${actionMenuItem}` })
+    return await assembledLocator.isVisible()
+  }
+
+  async SelectActionMenuItem(actionMenuItem: string) {
+    const assembledLocator = this.page.getByRole('menuitem', { name: `${actionMenuItem}` })
+    await assembledLocator.click()
+  }
+
+  async OpenTableSettings(): Promise<ClientPortalTableSettingsDialog> {
+    await this.Button_OpenTableSettings.Click()
+    const tableSettingsDialog = new ClientPortalTableSettingsDialog(this.global)
+    await expect(tableSettingsDialog.Title.locator).toBeAttached()
+    return tableSettingsDialog
+  }
+
+  async OpenTableSearch(): Promise<ClientPortalTableSearchDialog> {
+    await this.Button_OpenTableSearch.Click()
+    const tableSearchDialog = new ClientPortalTableSearchDialog(this.global)
+    await expect(tableSearchDialog.Title.locator).toBeAttached()
+    return tableSearchDialog
+  }
+
+  async SetTableSearch(searchTerm = '', skipClose = false) {
+    const tableSearchDialog = await this.OpenTableSearch()
+    await tableSearchDialog.Textbox_Search.Click()
+    await tableSearchDialog.Textbox_Search.Fill(searchTerm)
+    if (!skipClose) {
+      await tableSearchDialog.Close()
+    }
+    await this.page.waitForTimeout(1000)
+    return tableSearchDialog
+  }
+
+  async IsGlobalSearchActive(globalSearchTerm: string = '') {
+    const matchText = globalSearchTerm == '' ? `Global - ` : `Global - "${globalSearchTerm}"`
+    const globalSearchCloseButton = new Element(
+      this.global.page,
+      this.parent.locator('li').filter({ hasText: matchText }).getByLabel('close')
+    )
+    return await globalSearchCloseButton.IsVisible()
+  }
+
+  async CancelPinnedTableSearch(globalSearchTerm: string = '') {
+    const matchText = globalSearchTerm == '' ? `Global - ` : `Global - "${globalSearchTerm}"`
+    const globalSearchCloseButton = new Element(
+      this.global.page,
+      this.parent.locator('li').filter({ hasText: matchText }).getByLabel('close')
+    )
+    expect(await globalSearchCloseButton.IsVisible()).toBe(true)
+    await globalSearchCloseButton.Click()
+  }
+
+  async AddTableFilter(
+    column: DataTable_Columns_Type,
+    isEditMode = false
+  ): Promise<ClientPortalTableFilterDialog> {
+    await this.Button_AddTableFilter.Click()
+    await this.page
+      .getByRole('menuitem', {
+        name: `${LookupDataColumn(column, DataTable_ColumnName_Index.Column)}`,
+        exact: true,
+      })
+      .click()
+    const tableFilterDialog = new ClientPortalTableFilterDialog(this.global, isEditMode)
+    await expect(tableFilterDialog.Title.locator).toBeAttached()
+    return tableFilterDialog
+  }
+
+  async SetTableFilter_Text(
+    filterTerm: string,
+    column: DataTable_Columns_Type,
+    isEditMode = false,
+    skipClose = false
+  ) {
+    const tableFilterDialog = await this.AddTableFilter(column, isEditMode)
+    await tableFilterDialog.SetTextFilter(filterTerm, column)
+    if (!skipClose) {
+      await tableFilterDialog.Close()
+    }
+    const pinnedFilter = `${LookupDataColumn(
+      column,
+      DataTable_ColumnName_Index.Column
+    )} includes "${filterTerm}"` // this will change to equals when bug is fixed
+    await this.page.waitForTimeout(1000)
+    return { pinnedFilter, tableFilterDialog }
+  }
+
+  async IsTableFilterActive(pinnedFilter: string) {
+    console.log(`looking for a pinned filter of: ${pinnedFilter}`)
+    const pinnedFilterCloseButton = new Element(
+      this.global.page,
+      this.parent.locator('li').filter({ hasText: pinnedFilter }).getByLabel('close')
+    )
+    return await pinnedFilterCloseButton.IsVisible()
+  }
+
+  async CancelPinnedTableFilter(pinnedFilter: string) {
+    const pinnedFilterCloseButton = new Element(
+      this.global.page,
+      this.parent.locator('li').filter({ hasText: pinnedFilter }).getByLabel('close')
+    )
+    expect(await pinnedFilterCloseButton.IsVisible()).toBe(true)
+    await pinnedFilterCloseButton.Click()
+  }
+
+  async ClickLinkInDataCell(rowIndex: string, columnType: DataTable_Columns_Type, nthOffset = 0) {
+    const assembledLocator = `td[id*='_DataGrid_Row_${rowIndex}_${LookupDataColumn(columnType)}'] a`
+    const hyperlink = new Element(
+      this.global.page,
+      this.table.locator(assembledLocator).nth(nthOffset)
+    )
+    await hyperlink.Click()
+  }
+
+  async ClickLinkInDataCell_ProvideName(rowIndex: string, columnName: string, nthOffset = 0) {
+    const assembledLocator = `td[id*='_DataGrid_Row_${rowIndex}_${columnName}'] a`
+    const hyperlink = new Element(
+      this.global.page,
+      this.table.locator(assembledLocator).nth(nthOffset)
+    )
+    await hyperlink.Click()
+  }
+
+  async ClickButtonInDataCell(rowIndex: string, columnType: DataTable_Columns_Type, nthOffset = 0) {
+    const assembledLocator = `td[id*='_DataGrid_Row_${rowIndex}_${LookupDataColumn(
+      columnType
+    )}'] button`
+    const button = new Element(
+      this.global.page,
+      this.table.locator(assembledLocator).nth(nthOffset)
+    )
+    await button.Click()
+  }
+
+  async ClickButtonInDataCell_ProvideName(rowIndex: string, columnName: string, nthOffset = 0) {
+    const assembledLocator = `td[id*='_DataGrid_Row_${rowIndex}_${columnName}'] button`
+    const button = new Element(
+      this.global.page,
+      this.table.locator(assembledLocator).nth(nthOffset)
+    )
+    await button.Click()
+  }
+
+  async IsPaginationActive() {
+    return await this.Button_GoToFirstPage.IsVisible()
+  }
+
+  async Pagination_SetPageSize(pageSize: DataTable_ShowPageSize_Options) {
+    await this.page
+      .getByLabel(DataTableStrings.GoToFirstPage)
+      .locator('..')
+      .locator('..')
+      .getByRole('combobox')
+      .selectOption({ label: `${pageSize}` })
+  }
+
+  async Pagination_GotoPage(page: number) {
+    await this.SpinButton_SetPage.Click()
+    await this.SpinButton_SetPage.Fill(page.toString())
+  }
+
+  async GetPageInfo() {
+    const currentPageRowCount = await this.VisibleRowCount()
+    if (await this.IsPaginationActive()) {
+      const pageInfo = await this.page
+        .getByLabel(DataTableStrings.GoToFirstPage)
+        .locator('..')
+        .locator('..')
+        .locator('> div:nth-of-type(2) > span:nth-of-type(1)')
+        .textContent()
+      if (pageInfo == undefined) {
+        throw new Error('Unable to get page information the data table pagination UI')
+      }
+      const dataList = pageInfo?.split(' ')
+      return { currentPageRowCount, currentPage: Number(dataList[1]), maxPage: Number(dataList[3]) }
+    } else {
+      return { currentPageRowCount, currentPage: 1, maxPage: 1 }
+    }
+  }
+}

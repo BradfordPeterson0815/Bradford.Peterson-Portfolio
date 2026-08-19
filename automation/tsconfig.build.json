@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "incremental": false,
+    "outDir": "dist",
+    "baseUrl": "./"
+  },
+  "extends": "../../tsconfig.build.json",
+  "include": [
+    "index.ts"
+  ]
+}

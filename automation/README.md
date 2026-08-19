@@ -50,4 +50,4 @@ You can clone the repo and look at the code, but the tests will not launch succe
 ## ✉️ Contact
 
 Author - Bradford Peterson - bradford.peterson@hotmail.com
-Project Link: http://github.com/BradfordPeterson0815/portfolio/tree/master/automation
+Project Link: https://github.com/BradfordPeterson0815/Bradford.Peterson-Portfolio/tree/master/automation

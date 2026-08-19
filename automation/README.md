@@ -11,7 +11,7 @@ I was the sole QA contributor to this project and wrote all of the library code,
 
 ## 🚀 Features
 
-- The code is designed to handle multiple test clients, target clients and environments, with the target details and secrets abstracted from the tests. 
+- The code is designed to handle multiple test clients, target clients and environments, with the target details and secrets abstracted from the tests.
 
 - Current test clients are:
   - **Claims Portal (898 tests)** - web application for claims and jobs processing
@@ -50,4 +50,4 @@ You can clone the repo and look at the code, but the tests will not launch succe
 ## ✉️ Contact
 
 Author - Bradford Peterson - bradford.peterson@hotmail.com
-Project Link: https://github.com/BradfordPeterson0815/Bradford.Peterson-Portfolio/tree/main/automation
+Project Link: http://github.com/BradfordPeterson0815/portfolio/tree/master/automation
